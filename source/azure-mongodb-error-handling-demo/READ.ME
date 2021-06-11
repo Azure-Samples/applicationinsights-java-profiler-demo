@@ -1,0 +1,13 @@
+
+To build:
+mvn verify
+
+To run locally:
+mvn spring-boot:run
+
+Invoke full test:
+
+jmeter -t ./jfrmongo.jmx -n
+
+To start memory leak:
+In a browser -> http://<host>:8080/usr/getAllUsersLeaky

@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jfrmongo
+spec:
+  selector:
+    matchLabels:
+      app: jfrmongo
+  template:
+    metadata:
+      labels:
+        app: jfrmongo
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: jfrmongo
+        image: dracr.azurecr.io/mongo-demo:latest
+        imagePullPolicy: Always
+        env:
+        - name: APPLICATIONINSIGHTS_PROFILER_ENABLED
+          value: "true"
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+        ports:
+          - containerPort: 8080
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: jfrmongo
+  name: jfrmongo-svc
+spec:
+  ports:
+  - name: first
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: jfrmongo
+  sessionAffinity: None
+  type: ClusterIP

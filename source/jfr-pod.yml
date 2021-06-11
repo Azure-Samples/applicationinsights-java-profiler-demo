@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jfr-demo
+spec:
+  imagePullSecrets:
+  - name: wbaregistry
+  containers:
+  - image: wbaregistry.azurecr.io/cosmos-demo:latest
+    name: jfr-demo
+    imagePullPolicy: Always
+    env:
+    - name: APPLICATIONINSIGHTS_PROFILER_ENABLE
+      value: "true"
+    - name: CUSTOM_UPLOAD_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: environmentsecrets
+          key: CUSTOM_UPLOAD_TOKEN
+    - name: CUSTOM_UPLOAD_ACCOUNT_NAME
+      valueFrom:
+        secretKeyRef:
+          name: environmentsecrets
+          key: CUSTOM_UPLOAD_ACCOUNT_NAME
+    - name: CUSTOM_UPLOAD_URL
+      valueFrom:
+        secretKeyRef:
+          name: environmentsecrets
+          key: CUSTOM_UPLOAD_URL
+    resources:
+      limits:
+        memory: "500Mi"
+        cpu: "200m"
+    ports:
+    - containerPort: 8080
+    
