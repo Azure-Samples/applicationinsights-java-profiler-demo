@@ -1,0 +1,24 @@
+{
+    "connectionString": "InstrumentationKey=$APPINSIGHTS_KEY;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/",
+    "role": {
+        "name": "chauncee"
+    },
+    "instrumentation": {
+        "logging": {
+            "level": "DEBUG"
+        },
+        "micrometer": {
+            "enabled": true
+        }
+    },
+    "jmxMetrics": [{
+            "name": "JVM uptime (millis)",
+            "objectName": "java.lang:type=Runtime",
+            "attribute": "Uptime"
+        }, {
+            "name": "MetaSpace Used",
+            "objectName": "java.lang:type=MemoryPool,name=Metaspace",
+            "attribute": "Usage.used"
+        }
+    ]
+}

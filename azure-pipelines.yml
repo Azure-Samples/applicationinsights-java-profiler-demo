@@ -1,0 +1,164 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+- docker
+- darrich/cpustresser1 
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+- group: demo
+  
+steps:
+- task: Maven@3
+  inputs:
+    mavenPomFile: 'source/azure-cosmosdb-error-handling-demo/pom.xml'
+    publishJUnitResults: true
+    testResultsFiles: '**/surefire-reports/TEST-*.xml'
+    javaHomeOption: 'JDKVersion'
+    jdkVersionOption: '1.11'
+    mavenVersionOption: 'Default'
+    mavenAuthenticateFeed: false
+    effectivePomSkip: false
+    sonarQubeRunAnalysis: false
+
+- task: CopyFiles@2
+  inputs:
+    Contents: |
+      **/target/**
+      **/extensions/**
+      **/source/jfr-*.yml
+    TargetFolder: '$(build.artifactstagingdirectory)'
+    OverWrite: true
+
+- task: CopyFiles@2
+  displayName: Copy Files for Docker Build
+  inputs:
+    Contents: 'source/azure-cosmosdb-error-handling-demo/**'
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+    OverWrite: true
+
+- task: Bash@3
+  displayName: Set Application Properties
+  inputs:
+    targetType: 'inline' 
+    #arguments: # Optional
+    script: 'printenv && envsubst < "source/azure-cosmosdb-error-handling-demo/src/main/resources/application.properties" > "$(Build.ArtifactStagingDirectory)/source/application.properties"'
+    workingDirectory: '$(Build.SourcesDirectory)'
+    #failOnStderr: false # Optional
+    #noProfile: true # Optional
+    #noRc: true # Optional
+  env:
+    COSMOS_KEY1: $(COSMOS_KEY1) 
+    COSMOS_KEY2: $(COSMOS_KEY2) 
+
+- task: Bash@3
+  displayName: Set AppInsights value
+  inputs:
+    targetType: 'inline' 
+    #arguments: # Optional
+    script: 'envsubst < "source/extensions/applicationinsights.json" > "$(Build.ArtifactStagingDirectory)/source/applicationinsights.json"'
+    workingDirectory: '$(Build.SourcesDirectory)'
+    #failOnStderr: false # Optional
+    #noProfile: true # Optional
+    #noRc: true # Optional
+  env:
+    APPINSIGHTS_KEY: $(APPINSIGHTS_KEY) 
+
+- task: Bash@3
+  displayName: Set app insights jar file name and url
+  inputs:
+    targetType: 'inline' 
+    #arguments: # Optional
+    script: 'envsubst < "source/Dockerfile" > "$(Build.ArtifactStagingDirectory)/source/Dockerfile"'
+    workingDirectory: '$(Build.SourcesDirectory)'
+    failOnStderr: true
+    #failOnStderr: false # Optional
+    #noProfile: true # Optional
+    #noRc: true # Optional
+  env:
+    JAR_FILE_NAME: $(JAR_FILE_NAME)
+    JAR_FILE_URL: $(JAR_FILE_URL)
+  
+- task: Bash@3
+  displayName: Set kubernetes secrets
+  inputs:
+    targetType: 'inline' 
+    #arguments: # Optional
+    script: 'envsubst < "source/environmentsecrets.yml" > "$(Build.ArtifactStagingDirectory)/source/environmentsecrets.yml"'
+    workingDirectory: '$(Build.SourcesDirectory)'
+    failOnStderr: true
+    #failOnStderr: false # Optional
+    #noProfile: true # Optional
+    #noRc: true # Optional
+  env:
+    CUSTOM_UPLOAD_TOKEN: $(CUSTOM_UPLOAD_TOKEN)
+    CUSTOM_UPLOAD_ACCOUNT_NAME: $(CUSTOM_UPLOAD_ACCOUNT_NAME)
+    CUSTOM_UPLOAD_URL: $(CUSTOM_UPLOAD_URL)
+
+- task: Docker@2
+  displayName: Login to ACR
+  inputs:
+    command: login
+    containerRegistry: wbaregistry
+
+- task: Docker@2
+  displayName: Build and Push
+  inputs:
+    containerRegistry: 'wbaregistry'
+    repository: 'cosmos-demo'
+    command: 'buildAndPush'
+    Dockerfile: '$(Build.ArtifactStagingDirectory)/source/Dockerfile'
+    buildContext: '$(Build.ArtifactStagingDirectory)/source'
+    tags: |
+      latest
+      $(Build.SourceBranchName)
+      $(Build.BuildNumber)
+- task: Kubernetes@1
+  displayName: delete K8S secrets
+  continueOnError: true
+  inputs:
+    connectionType: 'Kubernetes Service Connection'
+    kubernetesServiceEndpoint: 'wbajfr'
+    namespace: 'default'
+    command: 'delete'
+    arguments: '-f $(Build.ArtifactStagingDirectory)/source/environmentsecrets.yml'
+    secretType: 'dockerRegistry'
+    containerRegistryType: 'Azure Container Registry'
+
+- task: Kubernetes@1
+  displayName: apply current k8s secrets
+  inputs:
+    connectionType: 'Kubernetes Service Connection'
+    kubernetesServiceEndpoint: 'wbajfr'
+    namespace: 'default'
+    command: 'apply'
+    arguments: '-f $(Build.ArtifactStagingDirectory)/source/environmentsecrets.yml'
+    secretType: 'dockerRegistry'
+    containerRegistryType: 'Azure Container Registry'
+- task: Kubernetes@1
+  displayName: delete current k8s pod
+  continueOnError: true
+  inputs:
+    connectionType: 'Kubernetes Service Connection'
+    kubernetesServiceEndpoint: 'wbajfr'
+    namespace: 'default'
+    command: 'delete'
+    arguments: '-f $(Build.ArtifactStagingDirectory)/source/jfr-deploy.yml'
+    secretType: 'dockerRegistry'
+    containerRegistryType: 'Azure Container Registry'
+- task: Kubernetes@1
+  displayName: apply current pod 
+  inputs:
+    connectionType: 'Kubernetes Service Connection'
+    kubernetesServiceEndpoint: 'wbajfr'
+    namespace: 'default'
+    command: 'apply'
+    arguments: '-f $(Build.ArtifactStagingDirectory)/source/jfr-deploy.yml'
+    secretType: 'dockerRegistry'
+    containerRegistryType: 'Azure Container Registry'
